@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Online Application / Registration Form</title>
+
+  <!-- jQuery (used for UI and AJAX) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <!-- html2canvas + jsPDF for client-side export to PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    /* ---------- VARIABLES & RESET ---------- */
+    :root{
+      --bg: #f4f7fb; --card:#ffffff; --muted:#6b7280; --text:#0f172a;
+      --accent: #2563eb; --accent-2: #06b6d4; --radius:12px;
+      --shadow: 0 10px 30px rgba(10,20,50,0.06);
+    }
+    [data-theme="dark"]{
+      --bg: #071026; --card:#0b1220; --text:#e6eef8; --muted:#9fb0d0; --shadow: 0 8px 30px rgba(0,0,0,0.7);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter, Arial, sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+    .container{max-width:1000px;margin:28px auto;padding:16px}
+
+    /* ---------- HEADER ---------- */
+    header{display:flex;justify-content:space-between;align-items:center;background:var(--card);padding:12px 18px;border-radius:10px;box-shadow:var(--shadow)}
+    header h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+
+    /* ---------- CARD ---------- */
+    .card{background:var(--card);padding:18px;border-radius:14px;box-shadow:var(--shadow);margin-top:16px}
+
+    /* ---------- MULTI-STEP LAYOUT ---------- */
+    .steps{display:grid;grid-template-columns:1fr 300px;gap:20px}
+    .form-area{padding:8px}
+    .side-preview{padding:12px;border-left:1px dashed rgba(0,0,0,0.04)}
+    .progress-bar{height:10px;background:rgba(0,0,0,0.06);border-radius:999px;overflow:hidden;margin-bottom:16px}
+    .progress-bar > div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0%;transition:width .4s ease}
+
+    fieldset{border:0;padding:0;margin:0}
+    .step{display:none}
+    .step.active{display:block}
+
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type="text"],input[type="email"],input[type="tel"],select,textarea,input[type="date"]{
+      width:100%;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.08);background:transparent;color:var(--text)
+    }
+    textarea{min-height:90px;resize:vertical;padding-top:10px}
+    .form-actions{display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:8px}
+
+    .btn{background:var(--accent);color:white;padding:10px 14px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(37,99,235,0.12)}
+    .btn:disabled{opacity:0.6;cursor:not-allowed}
+
+    /* ---------- PHOTO PREVIEW ---------- */
+    .avatar{width:150px;height:150px;border-radius:12px;object-fit:cover;border:2px solid rgba(0,0,0,0.06);display:block}
+    .small{font-size:13px;color:var(--muted)}
+
+    /* ---------- SUCCESS POPUP ---------- */
+    .popup{
+      position:fixed;left:50%;top:20px;transform:translateX(-50%);background:linear-gradient(90deg,var(--accent),var(--accent-2));color:white;padding:12px 18px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.2);display:none;z-index:9999
+    }
+
+    /* ---------- RESPONSIVE ---------- */
+    @media(max-width:900px){.steps{grid-template-columns:1fr}.side-preview{border-left:0;border-top:1px dashed rgba(0,0,0,0.04);padding-top:18px}}
+    @media(max-width:560px){.form-row{grid-template-columns:1fr}}
+    .hint{font-size:12px;color:var(--muted)}
+
+    /* ---------- PRINT STYLES for PDF ---------- */
+    @media print{
+      header, .form-actions, .popup, .progress-bar {display:none}
+      body{background:white}
+      .container{padding:0;margin:0}
+    }
+  </style>
+</head>
+<body>
+
+<div class="container" id="app">
+  <header>
+    <h1>Online Application / Registration</h1>
+    <div class="controls">
+      <button id="toggleTheme" class="btn ghost">Toggle Dark</button>
+      <button id="exportPdf" class="btn">Export to PDF</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <!-- Progress -->
+    <div class="progress-bar"><div id="progressFill"></div></div>
+
+    <div class="steps">
+      <!-- FORM AREA -->
+      <div class="form-area">
+        <form id="regForm" enctype="multipart/form-data">
+          <!-- Step 1: Personal -->
+          <fieldset class="step active" data-step="1">
+            <h3>Personal Details</h3>
+            <div class="form-row">
+              <div>
+                <label for="fullname">Full Name</label>
+                <input id="fullname" name="fullname" type="text" required />
+              </div>
+              <div>
+                <label for="dob">Date of Birth</label>
+                <input id="dob" name="dob" type="date" required />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label>Gender</label>
+                <select id="gender" name="gender" required>
+                  <option value="">Select</option><option>Female</option><option>Male</option><option>Other</option>
+                </select>
+              </div>
+              <div>
+                <label for="photo">Profile Photo</label>
+                <input id="photo" name="photo" type="file" accept="image/*" />
+                <small class="hint">You can upload a photo or keep the default.</small>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label for="email">Email</label>
+                <input id="email" name="email" type="email" required />
+              </div>
+              <div>
+                <label for="phone">Mobile Number</label>
+                <input id="phone" name="phone" type="tel" pattern="[0-9]{10}" placeholder="10-digit number" required />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div style="grid-column:1 / -1">
+                <label for="address">Address</label>
+                <textarea id="address" name="address"></textarea>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Step 2: Education & Skills -->
+          <fieldset class="step" data-step="2">
+            <h3>Education & Skills</h3>
+            <div class="form-row">
+              <div>
+                <label for="qualification">Qualification</label>
+                <select id="qualification" name="qualification" required>
+                  <option value="">Select</option>
+                  <option>B.Tech</option><option>MCA</option><option>BCA</option><option>Diploma</option><option>Others</option>
+                </select>
+              </div>
+              <div>
+                <label for="skills">Skills (comma separated)</label>
+                <input id="skills" name="skills" type="text" placeholder="HTML, CSS, JavaScript" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div style="grid-column:1 / -1">
+                <label for="projects">Projects / Achievements</label>
+                <textarea id="projects" name="projects" placeholder="One per line"></textarea>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Step 3: Preview & Submit -->
+          <fieldset class="step" data-step="3">
+            <h3>Preview & Submit</h3>
+            <div id="previewPanel" style="border:1px solid rgba(0,0,0,0.04);padding:12px;border-radius:8px">
+              <!-- populated by JS -->
+            </div>
+
+            <div class="form-row" style="margin-top:12px">
+              <div>
+                <label for="signature">Signature (optional image)</label>
+                <input id="signature" name="signature" type="file" accept="image/*"/>
+              </div>
+              <div>
+                <label for="agreement">Agreement</label>
+                <select id="agreement" name="agreement" required>
+                  <option value="">I agree?</option><option value="yes">Yes</option><option value="no">No</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="form-actions">
+            <div>
+              <button type="button" id="prevBtn" class="btn ghost" disabled>Previous</button>
+              <button type="button" id="nextBtn" class="btn">Next</button>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="saveLocal" type="button" class="btn ghost">Save Locally</button>
+              <button id="submitBtn" type="button" class="btn" style="display:none">Submit Application</button>
+            </div>
+          </div>
+
+        </form>
+      </div>
+
+      <!-- SIDE PREVIEW -->
+      <div class="side-preview">
+        <h4>Live Preview</h4>
+        <img id="avatarPreview" class="avatar" src="/mnt/data/A_flat,_digital_illustration_portrait_features_a_p.png" alt="Profile" />
+        <p class="small" style="margin-top:8px">Name: <span id="pv_name">Your Name</span></p>
+        <p class="small">Email: <span id="pv_email">you@example.com</span></p>
+        <p class="small">Phone: <span id="pv_phone">+91-xxxxxxxxxx</span></p>
+
+        <hr style="margin:12px 0" />
+        <h5>Quick Actions</h5>
+        <p><button id="downloadVcard" class="btn ghost">Download vCard</button></p>
+        <p><button id="clearLocal" class="btn ghost">Clear Saved</button></p>
+      </div>
+    </div> <!-- .steps -->
+  </div> <!-- .card -->
+</div> <!-- .container -->
+
+<!-- Success popup -->
+<div class="popup" id="popupSuccess">Application submitted successfully ✅</div>
+
+<script>
+  // ---------- App logic ----------
+  $(function(){
+    const steps = $('.step'), totalSteps = steps.length;
+    let currentStep = 1;
+    const $progress = $('#progressFill');
+
+    function showStep(n){
+      steps.removeClass('active');
+      steps.filter('[data-step="'+n+'"]').addClass('active');
+      // progress
+      const pct = Math.round((n-1)/(totalSteps-1)*100);
+      $progress.css('width', pct + '%');
+      // buttons
+      $('#prevBtn').prop('disabled', n===1);
+      $('#nextBtn').toggle(n < totalSteps);
+      $('#submitBtn').toggle(n === totalSteps);
+      // update preview
+      populatePreview();
+    }
+
+    showStep(currentStep);
+
+    $('#nextBtn').on('click', function(){
+      if(!validateStep(currentStep)) return;
+      currentStep = Math.min(totalSteps, currentStep+1);
+      showStep(currentStep);
+      $('html,body').animate({scrollTop:0},200);
+    });
+
+    $('#prevBtn').on('click', function(){
+      currentStep = Math.max(1, currentStep-1);
+      showStep(currentStep);
+      $('html,body').animate({scrollTop:0},200);
+    });
+
+    // Validate step (simple)
+    function validateStep(n){
+      let valid = true;
+      const $step = steps.filter('[data-step="'+n+'"]');
+      $step.find('[required]').each(function(){
+        if(!$(this).val()){
+          $(this).css('outline','2px solid rgba(255,0,0,0.12)');
+          $(this).focus();
+          valid = false;
+          return false;
+        } else {
+          $(this).css('outline','none');
+        }
+      });
+      // phone length check
+      if(valid && n===1){
+        const phone = $('#phone').val().replace(/\D/g,'');
+        if(phone && phone.length !== 10){
+          alert('Please enter a valid 10-digit mobile number.');
+          $('#phone').focus();
+          valid = false;
+        }
+      }
+      return valid;
+    }
+
+    // Live preview binding
+    function populatePreview(){
+      $('#pv_name').text($('#fullname').val() || 'Your Name');
+      $('#pv_email').text($('#email').val() || 'you@example.com');
+      $('#pv_phone').text($('#phone').val() || '+91-xxxxxxxxxx');
+
+      // Build formatted preview HTML
+      const html = `
+        <h4 style="margin:6px 0 4px 0">${$('#fullname').val() || 'Your Name'}</h4>
+        <div class="small">DOB: ${$('#dob').val() || '-'}</div>
+        <div class="small">Gender: ${$('#gender').val() || '-'}</div>
+        <hr />
+        <div><strong>Contact</strong><br>Email: ${$('#email').val() || '-'}<br>Phone: ${$('#phone').val() || '-'}
+        <br><br><strong>Qualification</strong><br>${$('#qualification').val() || '-'}</div>
+        <hr />
+        <div><strong>Skills</strong><br>${$('#skills').val() || '-'}</div>
+        <div style="margin-top:8px;color:var(--muted)">Preview generated — final output will be shown on submission.</div>
+      `;
+      $('#previewPanel').html(html);
+    }
+
+    // Photo upload preview (profile)
+    $('#photo').on('change', function(){
+      const f = this.files[0];
+      if(!f) return;
+      const reader = new FileReader();
+      reader.onload = function(e){
+        $('#avatarPreview').attr('src', e.target.result);
+        // store preview in localStorage (base64)
+        localStorage.setItem('reg_photo', e.target.result);
+      };
+      reader.readAsDataURL(f);
+    });
+
+    // Signature image store preview (not shown on side)
+    $('#signature').on('change', function(){
+      const f = this.files[0];
+      if(!f) return;
+      const r = new FileReader();
+      r.onload = function(e){
+        localStorage.setItem('reg_signature', e.target.result);
+      }; r.readAsDataURL(f);
+    });
+
+    // When user types, update side preview and autosave minor fields to localStorage
+    $('#regForm').on('input change', 'input,select,textarea', function(){
+      populatePreview();
+    });
+
+    // Save to localStorage
+    $('#saveLocal').on('click', function(){
+      const data = gatherFormData({forStorage:true});
+      localStorage.setItem('reg_saved', JSON.stringify(data));
+      showPopup('Saved locally ✅');
+    });
+
+    // Load saved if exists on page load
+    (function loadSaved(){
+      const raw = localStorage.getItem('reg_saved');
+      const photo = localStorage.getItem('reg_photo');
+      if(raw){
+        try{
+          const obj = JSON.parse(raw);
+          // map fields
+          Object.keys(obj).forEach(k => {
+            if($('#'+k).length) $('#'+k).val(obj[k]);
+          });
+          // special: projects, skills etc.
+          $('#projects').val(obj.projects || '');
+        }catch(e){}
+      }
+      if(photo){
+        $('#avatarPreview').attr('src', photo);
+      }
+      populatePreview();
+    })();
+
+    // Clear saved
+    $('#clearLocal').on('click', function(){
+      if(confirm('Clear saved local data?')){
+        localStorage.removeItem('reg_saved'); localStorage.removeItem('reg_photo'); localStorage.removeItem('reg_signature');
+        showPopup('Local data cleared');
+      }
+    });
+
+    // Download vCard
+    $('#downloadVcard').on('click', function(){
+      const name = $('#fullname').val() || 'Your Name';
+      const tel = $('#phone').val() || '';
+      const email = $('#email').val() || '';
+      let vcard = "BEGIN:VCARD\nVERSION:3.0\n";
+      vcard += `FN:${name}\nTEL:${tel}\nEMAIL:${email}\nEND:VCARD\n`;
+      const blob = new Blob([vcard], {type:'text/vcard'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = name.replace(/\s+/g,'_') + '.vcf'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    // Submit (AJAX POST to submit.php)
+    $('#submitBtn').on('click', function(){
+      if(!validateStep(currentStep)) return;
+      const data = gatherFormData();
+      // Create FormData to include files if any
+      const fd = new FormData();
+      Object.keys(data).forEach(k => fd.append(k, data[k]));
+      // If photo file element provided, append actual file
+      const filePhoto = $('#photo')[0].files[0];
+      if(filePhoto) fd.set('photo_file', filePhoto);
+      const fileSign = $('#signature')[0].files[0];
+      if(fileSign) fd.set('signature_file', fileSign);
+
+      // Visual: disable button
+      $('#submitBtn').prop('disabled', true).text('Submitting...');
+      // AJAX post
+      $.ajax({
+        url: 'submit.php', // server endpoint (should handle DB, save files, send email)
+        method: 'POST',
+        data: fd,
+        processData: false,
+        contentType: false,
+        success: function(res){
+          // assume JSON response {status:'ok', msg:'...'}
+          try{
+            const json = (typeof res === 'string') ? JSON.parse(res) : res;
+            if(json.status === 'ok'){
+              showPopup('Application submitted successfully ✅');
+              // optionally clear localStorage
+              localStorage.removeItem('reg_saved');
+              // show the server-formatted output (server should redirect or return URL)
+              // If server returns {status:'ok', redirect:'output.php?id=...'}, you can redirect:
+              if(json.redirect) window.location.href = json.redirect;
+            } else {
+              showPopup('Server: ' + (json.msg || 'Submission failed'));
+            }
+          }catch(e){
+            // when server returns HTML (e.g., display page), open it in a new tab
+            const win = window.open();
+            win.document.open();
+            win.document.write(res);
+            win.document.close();
+            showPopup('Opening server response');
+          }
+        },
+        error: function(xhr){
+          showPopup('Submission failed — server error');
+        },
+        complete: function(){
+          $('#submitBtn').prop('disabled', false).text('Submit Application');
+        }
+      });
+
+    });
+
+    // gatherFormData helper
+    function gatherFormData(opts = {}){
+      const obj = {
+        fullname: $('#fullname').val(),
+        dob: $('#dob').val(),
+        gender: $('#gender').val(),
+        email: $('#email').val(),
+        phone: $('#phone').val(),
+        address: $('#address').val(),
+        qualification: $('#qualification').val(),
+        skills: $('#skills').val(),
+        projects: $('#projects').val(),
+        agreement: $('#agreement').val()
+      };
+      if(opts.forStorage){
+        // smaller payload for localStorage
+        return obj;
+      } else {
+        // include inline base64 photo if file not selected (use preview)
+        const photoSrc = $('#avatarPreview').attr('src');
+        obj.photoData = photoSrc || '';
+        return obj;
+      }
+    }
+
+    // show popup helper with animation
+    function showPopup(text){
+      const $p = $('#popupSuccess');
+      $p.text(text).stop(true,true).fadeIn(300).delay(2200).fadeOut(600);
+    }
+
+    // Toggle theme (dark)
+    $('#toggleTheme').on('click', function(){
+      const current = document.documentElement.getAttribute('data-theme');
+      document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    });
+
+    // Export to PDF: uses html2canvas + jsPDF
+    $('#exportPdf').on('click', async function(){
+      // Create a print-friendly panel from previewPanel and avatar
+      const origTheme = document.documentElement.getAttribute('data-theme');
+      // remove theme to ensure white bg in PDF? optional
+      // capture the .card area (we will capture preview panel and side)
+      const element = document.getElementById('app');
+      showPopup('Preparing PDF...');
+      try{
+        const canvas = await html2canvas(element, {scale:2, useCORS:true});
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p','pt','a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        // maintain aspect ratio
+        const imgProps = {width: canvas.width, height: canvas.height};
+        const ratio = Math.min(pageWidth / imgProps.width, pageHeight / imgProps.height);
+        const w = imgProps.width * ratio;
+        const h = imgProps.height * ratio;
+        pdf.addImage(imgData, 'PNG', (pageWidth - w)/2, 20, w, h);
+        pdf.save((($('#fullname').val()||'application') + '.pdf').replace(/\s+/g,'_'));
+        showPopup('PDF exported ✔');
+      }catch(err){
+        console.error(err);
+        showPopup('PDF export failed');
+      } finally {
+        document.documentElement.setAttribute('data-theme', origTheme || 'light');
+      }
+    });
+
+    // Initialize: next/prev logic sets total progress to 100% on step = last
+    // expose submit button when on last step
+    // On first load, showStep already called.
+
+  }); // end jQuery ready
+
+  // ---------- END ----------
+</script>
+
+</body>
+</html>
